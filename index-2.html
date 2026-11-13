@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Ilon o'yini</title>
+<style>
+:root{--bg:#10231c;--board:#173a2c;--line:#1d4636;--snake:#f2c94c;--head:#ffe58a;--food:#ef5b5b;--text:#e8f3ec}
+@media (prefers-color-scheme: light){:root{--bg:#10231c}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:Georgia,"Times New Roman",serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:12px;touch-action:none;overflow:hidden;user-select:none}
+h1{margin:0;font-size:1.6rem;font-weight:700}
+.bar{display:flex;gap:24px;font-size:1.1rem}
+.wrap{position:relative;width:min(92vw,60vh,420px);aspect-ratio:1}
+canvas{width:100%;height:100%;background:var(--board);border-radius:10px;display:block}
+.msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(16,35,28,.88);border-radius:10px;text-align:center;padding:16px}
+.msg.hide{display:none}
+button{font:inherit;font-size:1.1rem;padding:10px 26px;border:0;border-radius:8px;background:var(--snake);color:#1b2a1f;font-weight:700}
+.pad{display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,64px);gap:8px}
+.pad button{padding:0;font-size:1.5rem;background:var(--line);color:var(--text)}
+.pad button:active{background:var(--snake);color:#1b2a1f}
+#up{grid-column:2;grid-row:1}#left{grid-column:1;grid-row:2}#down{grid-column:2;grid-row:2}#right{grid-column:3;grid-row:2}
+</style>
+</head>
+<body>
+<h1>Ilon o'yini</h1>
+<div class="bar"><span>Ball: <b id="score">0</b></span><span>Rekord: <b id="best">0</b></span></div>
+<div class="wrap">
+  <canvas id="c" width="420" height="420"></canvas>
+  <div class="msg" id="msg">
+    <div id="msgText">Ekranda surib yoki tugmalar bilan boshqaring</div>
+    <button id="start">Boshlash</button>
+  </div>
+</div>
+<div class="pad">
+  <button id="up">▲</button><button id="left">◀</button><button id="down">▼</button><button id="right">▶</button>
+</div>
+<script>
+const N=15, S=420/N;
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+const scoreEl=document.getElementById('score'), bestEl=document.getElementById('best');
+const msg=document.getElementById('msg'), msgText=document.getElementById('msgText');
+let snake, dir, nextDir, food, score, timer, best=0;
+try{best=+localStorage.getItem('snakeBest')||0}catch(e){}
+bestEl.textContent=best;
+
+function reset(){
+  snake=[{x:7,y:7},{x:6,y:7},{x:5,y:7}];
+  dir={x:1,y:0}; nextDir=dir; score=0; scoreEl.textContent=0;
+  placeFood();
+}
+function placeFood(){
+  do{food={x:Math.floor(Math.random()*N),y:Math.floor(Math.random()*N)}}
+  while(snake.some(s=>s.x===food.x&&s.y===food.y));
+}
+function setDir(x,y){
+  if(x===-dir.x&&y===-dir.y)return;
+  nextDir={x,y};
+}
+function tick(){
+  dir=nextDir;
+  const h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+  if(h.x<0||h.y<0||h.x>=N||h.y>=N||snake.some(s=>s.x===h.x&&s.y===h.y))return gameOver();
+  snake.unshift(h);
+  if(h.x===food.x&&h.y===food.y){
+    score++; scoreEl.textContent=score; placeFood();
+    if(navigator.vibrate)navigator.vibrate(20);
+  } else snake.pop();
+  draw();
+}
+function draw(){
+  ctx.clearRect(0,0,420,420);
+  ctx.fillStyle='#1d4636';
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++)if((i+j)%2)ctx.fillRect(i*S,j*S,S,S);
+  ctx.fillStyle='#ef5b5b';
+  ctx.beginPath();ctx.arc(food.x*S+S/2,food.y*S+S/2,S*0.38,0,7);ctx.fill();
+  snake.forEach((s,i)=>{
+    ctx.fillStyle=i?'#f2c94c':'#ffe58a';
+    ctx.beginPath();ctx.roundRect(s.x*S+2,s.y*S+2,S-4,S-4,6);ctx.fill();
+  });
+}
+function gameOver(){
+  clearInterval(timer);
+  if(score>best){best=score;bestEl.textContent=best;try{localStorage.setItem('snakeBest',best)}catch(e){}}
+  msgText.textContent='Tugadi! Ball: '+score;
+  document.getElementById('start').textContent='Qayta o\'ynash';
+  msg.classList.remove('hide');
+}
+function start(){
+  reset(); draw(); msg.classList.add('hide');
+  clearInterval(timer); timer=setInterval(tick,140);
+}
+document.getElementById('start').onclick=start;
+const map={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
+for(const k in map){
+  document.getElementById(k).addEventListener('touchstart',e=>{e.preventDefault();setDir(...map[k])},{passive:false});
+  document.getElementById(k).addEventListener('click',()=>setDir(...map[k]));
+}
+// surish (swipe)
+let t0=null;
+document.addEventListener('touchstart',e=>{t0=e.touches[0]},{passive:true});
+document.addEventListener('touchend',e=>{
+  if(!t0)return;
+  const t=e.changedTouches[0],dx=t.clientX-t0.clientX,dy=t.clientY-t0.clientY;
+  if(Math.max(Math.abs(dx),Math.abs(dy))>25){
+    if(Math.abs(dx)>Math.abs(dy))setDir(dx>0?1:-1,0);else setDir(0,dy>0?1:-1);
+  }
+  t0=null;
+});
+// kompyuter klaviaturasi
+document.addEventListener('keydown',e=>{
+  const m={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]}[e.key];
+  if(m)setDir(...m);
+});
+reset(); draw();
+</script>
+</body>
+</html>
